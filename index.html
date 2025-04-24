@@ -1,78 +1,63 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>GREAT CALL by Kewal</title>
+  <title>Great Group Call</title>
   <style>
     body {
       font-family: Arial, sans-serif;
-      background: #f2f2f2;
       text-align: center;
+      background-color: #f4f4f4;
     }
     video {
       width: 300px;
       margin: 10px;
-      border-radius: 12px;
-      box-shadow: 0 0 10px rgba(0,0,0,0.2);
+      border-radius: 10px;
     }
     #videos {
       display: flex;
       flex-wrap: wrap;
       justify-content: center;
-      margin-top: 20px;
-    }
-    h2 {
-      color: #333;
-    }
-    #errorMsg {
-      color: red;
-      font-weight: bold;
     }
   </style>
 </head>
 <body>
-  <h2>📞 GREAT VIDEO CALL</h2>
-  <p>Anyone who opens this link joins your call</p>
+  <h2>Great Group Video Call</h2>
+  <p>Join by clicking this link — no setup needed</p>
   <div id="videos">
     <video id="myVideo" autoplay muted playsinline></video>
   </div>
-  <p id="errorMsg"></p>
 
-  <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/simple-peer@9.11.1/simplepeer.min.js"></script>
+  <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
   <script>
-    const socket = io('https://video-signal-server.glitch.me'); // FREE signal server
+    const socket = io('https://video-signal-server.glitch.me');
+    const videoGrid = document.getElementById('videos');
+    const myVideo = document.getElementById('myVideo');
     const peers = {};
-    const videosDiv = document.getElementById("videos");
-    const myVideo = document.getElementById("myVideo");
-    const errorMsg = document.getElementById("errorMsg");
-
-    let myStream;
 
     navigator.mediaDevices.getUserMedia({ video: true, audio: true })
       .then(stream => {
-        myStream = stream;
         myVideo.srcObject = stream;
 
-        socket.emit('join-room', 'great-room-kewal');
+        socket.emit("join-room", "great-group-room");
 
-        socket.on('all-users', users => {
+        socket.on("all-users", users => {
           users.forEach(userId => {
             const peer = createPeer(userId, socket.id, stream);
             peers[userId] = peer;
           });
         });
 
-        socket.on('user-joined', payload => {
+        socket.on("user-joined", payload => {
           const peer = addPeer(payload.signal, payload.callerId, stream);
           peers[payload.callerId] = peer;
         });
 
-        socket.on('receiving-returned-signal', payload => {
-          const peer = peers[payload.id];
-          peer.signal(payload.signal);
+        socket.on("receiving-returned-signal", payload => {
+          peers[payload.id].signal(payload.signal);
         });
 
-        socket.on('user-disconnected', id => {
+        socket.on("user-disconnected", id => {
           if (peers[id]) {
             peers[id].destroy();
             const video = document.getElementById(id);
@@ -80,25 +65,50 @@
             delete peers[id];
           }
         });
+
+        function createPeer(userToSignal, callerId, stream) {
+          const peer = new SimplePeer({ initiator: true, trickle: false, stream });
+
+          peer.on("signal", signal => {
+            socket.emit("sending-signal", { userToSignal, callerId, signal });
+          });
+
+          peer.on("stream", remoteStream => {
+            addVideo(remoteStream, userToSignal);
+          });
+
+          return peer;
+        }
+
+        function addPeer(incomingSignal, id, stream) {
+          const peer = new SimplePeer({ initiator: false, trickle: false, stream });
+
+          peer.on("signal", signal => {
+            socket.emit("returning-signal", { signal, callerId: id });
+          });
+
+          peer.signal(incomingSignal);
+
+          peer.on("stream", remoteStream => {
+            addVideo(remoteStream, id);
+          });
+
+          return peer;
+        }
+
+        function addVideo(stream, id) {
+          const video = document.createElement('video');
+          video.srcObject = stream;
+          video.id = id;
+          video.autoplay = true;
+          video.playsInline = true;
+          videoGrid.appendChild(video);
+        }
       })
       .catch(err => {
+        alert("Please allow camera and mic access to join the call.");
         console.error(err);
-        errorMsg.textContent = "⚠️ Please allow camera/mic permission!";
       });
-
-    function createPeer(userToSignal, callerID, stream) {
-      const peer = new SimplePeer({ initiator: true, trickle: false, stream });
-
-      peer.on('signal', signal => {
-        socket.emit('sending-signal', { userToSignal, callerID, signal });
-      });
-
-      peer.on('stream', remoteStream => {
-        addVideo(remoteStream, userToSignal);
-      });
-
-      return peer;
-    }
-
-    function addPeer(incomingSignal, id, stream) {
-      const peer = new SimplePeer({ initiator: false, trick
+  </script>
+</body>
+</html>
